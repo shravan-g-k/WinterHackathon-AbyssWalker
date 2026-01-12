@@ -3,12 +3,13 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
-import { auth } from "./firebaseSetUp";
+import { auth } from "../firebaseSetUp";
 
 export async function signInWithGoogle() {
   try {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
+    console.log("successs")
     return result.user;
   } catch (error) {
     console.error("Google sign-in failed:", error);

@@ -45,4 +45,4 @@ export const processImageOCR = async (file, language = 'eng', onProgress) => {
     console.error("OCR Service Error:", error);
     throw new Error("Failed to read text from image.");
   }
-};
+}

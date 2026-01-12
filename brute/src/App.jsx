@@ -1,26 +1,17 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, File, Languages } from 'lucide-react';
+import React, { useState } from 'react';
+import { LogIn, Github, Mail, ShieldCheck, Languages } from 'lucide-react';
+import {signInWithGoogle,signOutUser} from "../backend/auth"
 
 export default function App() {
-  const [fileName, setFileName] = useState('');
-  const [description, setDescription] = useState('');
-  const [isHovered, setIsHovered] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const [language, setLanguage] = useState('eng');
-  const fileInputRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) {
-      setFileName(selectedFile.name);
-    }
-  };
-
-  const clearFile = () => {
-    setFileName('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const handleOAuthLogin = (provider) => {
+    setIsLoading(true);
+    // In a real app, you would redirect to your backend OAuth URL here
+    console.log(`Redirecting to ${provider} OAuth...`);
+    
+    // Simulating a redirect delay
+    setTimeout(() => setIsLoading(false), 2000);
   };
 
   const styles = {
@@ -31,212 +22,155 @@ export default function App() {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      boxSizing: 'border-box'
+      fontFamily: 'system-ui, -apple-system, sans-serif'
     },
     card: {
       width: '100%',
-      maxWidth: '450px',
+      maxWidth: '420px',
       backgroundColor: '#ffffff',
+      borderRadius: '24px',
+      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08)',
+      padding: '40px',
+      textAlign: 'center',
+      border: '1px solid #f1f5f9'
+    },
+    logoContainer: {
+      width: '64px',
+      height: '64px',
+      backgroundColor: '#3b82f6',
       borderRadius: '16px',
-      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
-      overflow: 'hidden',
-      border: '1px solid #e2e8f0'
-    },
-    header: {
-      backgroundColor: '#2563eb',
-      padding: '24px',
-      color: '#ffffff'
-    },
-    title: {
-      margin: 0,
-      fontSize: '20px',
-      fontWeight: '600',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px'
-    },
-    subtitle: {
-      margin: '4px 0 0 0',
-      fontSize: '14px',
-      color: '#dbeafe'
-    },
-    body: {
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '20px'
-    },
-    label: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      fontSize: '14px',
-      fontWeight: '500',
-      color: '#334155',
-      marginBottom: '8px'
-    },
-    dropzone: {
-      border: `2px dashed ${fileName ? '#93c5fd' : (isHovered ? '#60a5fa' : '#cbd5e1')}`,
-      backgroundColor: fileName ? '#eff6ff' : (isHovered ? '#f8fafc' : 'transparent'),
-      borderRadius: '12px',
-      padding: '24px',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '12px',
-      boxSizing: 'border-box'
-    },
-    select: {
-      width: '100%',
-      padding: '10px',
-      borderRadius: '8px',
-      border: '1px solid #cbd5e1',
-      fontSize: '14px',
-      outline: 'none',
-      cursor: 'pointer',
-      backgroundColor: '#fff'
-    },
-    textarea: {
-      width: '100%',
-      minHeight: '150px',
-      padding: '12px',
-      borderRadius: '12px',
-      border: `1px solid ${isFocused ? '#2563eb' : '#cbd5e1'}`,
-      boxShadow: isFocused ? '0 0 0 3px rgba(37, 99, 235, 0.1)' : 'none',
-      fontSize: '14px',
-      color: '#475569',
-      outline: 'none',
-      boxSizing: 'border-box',
-      resize: 'none',
-      fontFamily: 'inherit',
-      transition: 'all 0.2s ease'
-    },
-    button: {
-      width: '100%',
-      padding: '12px',
-      borderRadius: '12px',
-      border: 'none',
-      backgroundColor: fileName ? '#2563eb' : '#94a3b8',
-      color: '#ffffff',
-      fontWeight: '600',
-      fontSize: '14px',
-      cursor: fileName ? 'pointer' : 'not-allowed',
-      transition: 'all 0.2s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: '8px'
+      margin: '0 auto 24px',
+      color: '#fff',
+      boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)'
+    },
+    title: {
+      fontSize: '28px',
+      fontWeight: '800',
+      color: '#1e293b',
+      marginBottom: '8px',
+      letterSpacing: '-0.025em'
+    },
+    subtitle: {
+      fontSize: '15px',
+      color: '#64748b',
+      marginBottom: '32px',
+      lineHeight: '1.5'
+    },
+    oauthButton: {
+      width: '100%',
+      padding: '14px 20px',
+      borderRadius: '12px',
+      border: '1px solid #e2e8f0',
+      backgroundColor: '#ffffff',
+      color: '#334155',
+      fontSize: '16px',
+      fontWeight: '600',
+      cursor: isLoading ? 'not-allowed' : 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '12px',
+      transition: 'all 0.2s ease',
+      marginBottom: '16px',
+      outline: 'none'
+    },
+    dividerContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      margin: '24px 0',
+      color: '#cbd5e1'
+    },
+    dividerLine: {
+      flex: 1,
+      height: '1px',
+      backgroundColor: '#e2e8f0'
+    },
+    dividerText: {
+      padding: '0 12px',
+      fontSize: '13px',
+      fontWeight: '500',
+      color: '#94a3b8',
+      textTransform: 'uppercase'
+    },
+    footer: {
+      marginTop: '32px',
+      fontSize: '13px',
+      color: '#94a3b8',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px'
     }
   };
 
   return (
     <div style={styles.container}>
       <style>{`
-        body { margin: 0; padding: 0; }
-        * { box-sizing: border-box; }
+        .btn-oauth:hover {
+          background-color: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          transform: translateY(-1px);
+        }
+        .btn-oauth:active {
+          transform: translateY(0);
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; }
       `}</style>
 
       <div style={styles.card}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>
-            <Languages size={24} />
-            Multilingual OCR
-          </h1>
-          <p style={styles.subtitle}>Upload an image and press Enter to scan.</p>
+        <div style={styles.logoContainer}>
+          <Languages size={32} />
+        </div>
+        
+        <h1 style={styles.title}>Welcome to ScanAny</h1>
+        <p style={styles.subtitle}>
+          Sign in to your account to start extracting text from your documents.
+        </p>
+
+        <button 
+          className="btn-oauth"
+          style={styles.oauthButton}
+          onClick={() => signInWithGoogle()}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+             <div className="spinner" style={{ display: 'flex', alignItems: 'center' }}>
+               <LogIn size={20} />
+             </div>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+          )}
+          {isLoading ? 'Connecting...' : 'Continue with Google'}
+        </button>
+
+        <button 
+          className="btn-oauth"
+          style={styles.oauthButton}
+          onClick={() => signOutUser()}
+          disabled={isLoading}
+        >
+          <Github size={20} />
+          Continue with GitHub
+        </button>
+
+        <div style={styles.dividerContainer}>
+          <div style={styles.dividerLine}></div>
+          <span style={styles.dividerText}>Trusted by thousands</span>
+          <div style={styles.dividerLine}></div>
         </div>
 
-        <div style={styles.body}>
-          {/* Language Selection */}
-          <div>
-            <label style={styles.label}>Select Language</label>
-            <select 
-              style={styles.select} 
-              value={language} 
-              onChange={(e) => setLanguage(e.target.value)}
-            >
-              <option value="eng">English</option>
-              <option value="fra">French</option>
-              <option value="spa">Spanish</option>
-              <option value="deu">German</option>
-              <option value="chi_sim">Chinese (Simplified)</option>
-              <option value="jpn">Japanese</option>
-              <option value="hin">Hindi</option>
-              <option value="ara">Arabic</option>
-            </select>
-          </div>
-
-          {/* File Input Section */}
-          <div>
-            <label style={styles.label}>Upload Image</label>
-            <div 
-              style={styles.dropzone}
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input 
-                type="file" 
-                accept="image/*"
-                style={{ display: 'none' }} 
-                ref={fileInputRef}
-                onChange={handleFileChange}
-              />
-              
-              {!fileName ? (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ backgroundColor: '#f1f5f9', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                    <Upload size={20} color="#64748b" />
-                  </div>
-                  <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: '500' }}>Click to upload image</p>
-                </div>
-              ) : (
-                <div style={{ width: '100%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                      <File size={18} color="#2563eb" />
-                      <span style={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
-                        {fileName}
-                      </span>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); clearFile(); }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                    >
-                      <X size={16} color="#94a3b8" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <button 
-            type="button"
-            style={styles.button} 
-            disabled={!fileName}
-          >
-            Scan Text (Press Enter)
-          </button>
-
-          {/* Result Textarea */}
-          <div>
-            <label style={styles.label}>
-              <FileText size={16} />
-              Extracted Text
-            </label>
-            <textarea
-              style={styles.textarea}
-              placeholder="Extracted text will appear here..."
-              value={description}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
+        <div style={styles.footer}>
+          <ShieldCheck size={16} color="#10b981" />
+          <span>Secure, encrypted authentication</span>
         </div>
       </div>
     </div>
