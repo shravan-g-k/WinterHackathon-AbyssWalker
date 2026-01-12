@@ -1,13 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import Sign from './signup.jsx' 
+import Chat from './chat.jsx' 
 import './index.css'
 
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     
-    <Sign/>
+    <Chat/>
   </StrictMode>,
 )
