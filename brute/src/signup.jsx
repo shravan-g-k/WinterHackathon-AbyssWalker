@@ -179,7 +179,7 @@ const LoginPage = () => {
 };
 
 // Main App Component
-export default function App() {
+export default function Sign() {
   return (
     <div style={{ WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' }}>
       <LoginPage />
