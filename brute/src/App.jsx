@@ -151,6 +151,8 @@ const SignInCard = () => {
 };
 
 // UI Component: Branding Header
+
+
 const AuthHeader = () => (
   <div style={styles.authHeader}>
     <div style={styles.iconCircle}>
