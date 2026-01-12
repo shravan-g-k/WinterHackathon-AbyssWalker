@@ -219,7 +219,7 @@ const Chat = () => {
     { id: 'chat', label: 'Chat' },
     { id: 'analyzer', label: 'Analyzer' },
     { id: 'learning', label: 'Learning' },
-    { id: 'court', label: 'Virtual Court' }
+    { id: 'court', label: 'Court Room' }
   ];
 
   return (
