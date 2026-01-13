@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Globe, ChevronDown } from 'lucide-react';
+import {signInWithGoogle} from '../backend/auth.js';
 
 /**
  * TRANSLATIONS DATA
@@ -278,7 +279,7 @@ export default function Sign() {
 
         {/* GOOGLE AUTH BUTTON */}
         <button
-          onClick={() => console.log("Google Auth requested in:", lang)}
+          onClick={() => signInWithGoogle()}
           style={styles.googleButton}
           onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
           onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}

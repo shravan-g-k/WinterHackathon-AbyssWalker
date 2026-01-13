@@ -3,7 +3,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
-import { auth } from "./firebaseSetUp";
+import { auth } from "../firebaseSetUp";
 
 export async function signInWithGoogle() {
   try {
