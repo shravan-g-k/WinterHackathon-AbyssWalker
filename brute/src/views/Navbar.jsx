@@ -28,11 +28,7 @@ const Navbar = ({ onLogout, userEmail }) => {
         {/* Left Side: Logo & Brand */}
         <Link to="/" className="flex items-center gap-3 group">
           <div className="relative">
-            <img 
-              src="https://cdn-icons-png.flaticon.com/512/3665/3665923.png" 
-              alt="Logo" 
-              className="w-10 h-10 object-contain transition-transform group-hover:rotate-12 duration-300"
-            />
+            
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
           </div>
           <div className="hidden lg:block">
