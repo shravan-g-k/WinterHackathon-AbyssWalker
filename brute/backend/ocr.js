@@ -1,48 +1,19 @@
-import Tesseract from 'tesseract.js';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-/**
- * Cleans extracted OCR text by removing extra whitespace and unwanted noise symbols.
- * @param {string} text - The raw text from Tesseract.
- * @returns {string} - The cleaned text.
- */
-const cleanOCRText = (text) => {
-  if (!text) return "";
+const genAI = new GoogleGenerativeAI("AIzaSyClk89euI3b5A2foaV2fBq5tM723u4su8I");
 
-  return text
-    // Remove unwanted symbols often produced by OCR noise (e.g., random bars, dots, or slashes)
-    // You can customize this regex based on your specific needs
-    .replace(/[|\\/_~^]/g, '')
-    // Replace multiple spaces/newlines with a single space
-    .replace(/\s+/g, ' ')
-    // Remove leading/trailing whitespace
-    .trim();
-};
+export async function summarizeChat(text) {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+  });
 
-/**
- * Simple OCR Service using Tesseract.js
- * Uses the high-level recognize function and applies post-processing cleaning.
- */
-export const processImageOCR = async (file, language = 'eng', onProgress) => {
-  if (!file) throw new Error("Please select an image first.");
+  const prompt = `
+Summarize the following text clearly and concisely:
 
-  try {
-    const { data: { text } } = await Tesseract.recognize(
-      file,
-      language,
-      {
-        logger: m => {
-          if (m.status === 'recognizing text' && onProgress) {
-            onProgress(Math.floor(m.progress * 100));
-          }
-        }
-      }
-    );
+${text}
+`;
 
-    // Apply the cleaning logic before returning the result
-    return cleanOCRText(text);
-    
-  } catch (error) {
-    console.error("OCR Service Error:", error);
-    throw new Error("Failed to read text from image.");
-  }
+  const result = await model.generateContent(prompt);
+  console.log("summary :",result.response.text())
+  return result.response.text();
 }
