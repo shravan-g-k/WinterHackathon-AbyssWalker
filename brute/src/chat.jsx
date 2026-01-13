@@ -1,389 +1,227 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Send, Paperclip, Plus, MessageSquare, User, RotateCcw } from 'lucide-react';
+import { runChat } from '../backend/ai'; // Ensure this path is correct
 
-// Helper function to create the initial welcome message
 const createInitialBotMessage = () => ({
-  id: Date.now(),
-  text: "Hello! I'm Brute, your AI assistant. You can send me messages or upload files for analysis. How can I help you today?",
+  id: 'initial',
+  text: "Hello! I'm Brute, your AI assistant. I'm here to help you with legal research, contract review, or document summaries. How can I assist you today?",
   isUser: false,
   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
 });
 
 const Chat = () => {
-  const [currentView, setCurrentView] = useState('chat');
+  // --- States ---
   const [messages, setMessages] = useState([createInitialBotMessage()]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState(null); // Track the active Firestore Doc
   const [chatHistory, setChatHistory] = useState([
     { id: 101, title: 'Legal Research - Case A', date: 'Today' },
     { id: 102, title: 'Contract Review - Corp X', date: 'Yesterday' },
-    { id: 103, title: 'Document Summary', date: 'Jan 10' },
   ]);
 
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // --- Helpers ---
   const scrollToBottom = () => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    if (currentView === 'chat') {
-      scrollToBottom();
-    }
-  }, [messages, isTyping, currentView]);
+    scrollToBottom();
+  }, [messages, isTyping]);
 
+  // --- Handlers ---
   const handleNewChat = () => {
     if (messages.length > 1) {
       const firstUserMsg = messages.find(m => m.isUser)?.text || "New Conversation";
       const title = firstUserMsg.length > 25 ? firstUserMsg.substring(0, 25) + '...' : firstUserMsg;
-      
-      const newHistoryItem = {
-        id: Date.now(),
-        title: title,
-        date: 'Just now',
-        fullChat: [...messages]
-      };
-      
-      setChatHistory(prev => [newHistoryItem, ...prev]);
+      setChatHistory(prev => [{ id: Date.now(), title, date: 'Just now', fullChat: [...messages] }, ...prev]);
     }
-
     setMessages([createInitialBotMessage()]);
-    setCurrentView('chat');
     setInputValue('');
+    setCurrentChatId(null); // Reset ID so ai.js knows to create a new document
   };
 
-  const handleSend = (text, fileData = null) => {
-    if (!text.trim() && !fileData) return;
+  const handleSend = async (text) => {
+    if (!text.trim()) return;
 
+    // 1. Add User Message to UI
     const userMessage = {
       id: Date.now(),
       text: text,
       isUser: true,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      file: fileData
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
-
     setIsTyping(true);
-    setTimeout(() => {
+
+    const botMessageId = Date.now() + 1;
+    let accumulatedResponse = "";
+
+    try {
+      // 2. Call the AI Backend with Streaming
+      // We pass a callback function to handle chunks as they arrive
+      const result = await runChat(currentChatId, text, (chunk) => {
+        setIsTyping(false); // Stop pulse as soon as first word arrives
+        accumulatedResponse += chunk;
+
+        setMessages(prev => {
+          const existingMsgIndex = prev.findIndex(m => m.id === botMessageId);
+          if (existingMsgIndex !== -1) {
+            const updatedMessages = [...prev];
+            updatedMessages[existingMsgIndex] = {
+              ...updatedMessages[existingMsgIndex],
+              text: accumulatedResponse
+            };
+            return updatedMessages;
+          } else {
+            return [...prev, {
+              id: botMessageId,
+              text: accumulatedResponse,
+              isUser: false,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            }];
+          }
+        });
+      });
+
+      // 3. Update the Current Chat ID if it was a new session
+      if (!currentChatId && result?.newId) {
+        setCurrentChatId(result.newId);
+      }
+
+    } catch (error) {
       setIsTyping(false);
-      const botMessage = {
-        id: Date.now() + 1,
-        text: fileData 
-          ? `I've received your file: **${fileData.name}**. I'm currently analyzing the contents. Please let me know if you have specific questions about it!`
-          : "I've received your request. How else can I assist you with your legal or document queries today?",
-        isUser: false,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      };
-      setMessages(prev => [...prev, botMessage]);
-    }, 1500);
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const isImage = file.type.startsWith('image/');
-    
-    if (isImage) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const fileData = {
-          name: file.name,
-          size: (file.size / 1024).toFixed(1) + ' KB',
-          type: file.type,
-          preview: event.target.result
-        };
-        handleSend(`Uploaded a file: ${file.name}`, fileData);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      const fileData = {
-        name: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        type: file.type,
-        preview: null
-      };
-      handleSend(`Uploaded a file: ${file.name}`, fileData);
-    }
-    
-    e.target.value = '';
-  };
-
-  // Inline Style Definitions
-  const styles = {
-    container: {
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      backgroundColor: '#f3f4f6',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      overflow: 'hidden',
-    },
-    header: {
-      backgroundColor: '#005b41',
-      color: 'white',
-      padding: '0.5rem 1.5rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      zIndex: 20,
-    },
-    headerLeft: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.75rem',
-    },
-    logoWrapper: {
-      width: '2.5rem',
-      height: '2.5rem',
-      backgroundColor: 'white',
-      borderRadius: '50%',
-      overflow: 'hidden',
-      border: '2px solid rgba(255,255,255,0.2)',
-    },
-    navGroup: {
-      display: 'flex',
-      gap: '0.5rem',
-      alignItems: 'center',
-    },
-    navBtn: (active) => ({
-      padding: '0.5rem 1rem',
-      borderRadius: '0.5rem',
-      fontSize: '0.875rem',
-      fontWeight: '600',
-      cursor: 'pointer',
-      backgroundColor: active ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
-      color: 'white',
-      border: 'none',
-      transition: 'background-color 0.2s',
-    }),
-    mainWrapper: {
-      display: 'flex',
-      flex: 1,
-      overflow: 'hidden',
-    },
-    sidebar: {
-      width: '260px',
-      backgroundColor: '#f9fafb',
-      borderRight: '1px solid #e5e7eb',
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-    },
-    chatContent: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: '#f8fafc',
-      overflow: 'hidden',
-    },
-    chatScroll: {
-      flex: 1,
-      overflowY: 'auto',
-      padding: '1.5rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '1.5rem',
-    },
-    sidebarItem: {
-      padding: '0.75rem 1rem',
-      fontSize: '0.875rem',
-      color: '#374151',
-      cursor: 'pointer',
-      borderBottom: '1px solid #f3f4f6',
-    },
-    bubble: (isUser) => ({
-      padding: '1rem',
-      fontSize: '0.875rem',
-      backgroundColor: isUser ? '#005b41' : 'white',
-      color: isUser ? 'white' : '#1f2937',
-      borderRadius: isUser ? '1.5rem 1.5rem 0.2rem 1.5rem' : '1.5rem 1.5rem 1.5rem 0.2rem',
-      border: isUser ? 'none' : '1px solid #e5e7eb',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-      wordBreak: 'break-word',
-    }),
-    footer: {
-      padding: '1rem',
-      backgroundColor: 'white',
-      borderTop: '1px solid #e5e7eb',
+      console.error("AI Communication Error:", error);
+      // Optional: Add an error message to the chat UI here
     }
   };
-
-  const views = [
-    { id: 'chat', label: 'Chat' },
-    { id: 'analyzer', label: 'Analyzer' },
-    { id: 'learning', label: 'Learning' },
-    { id: 'court', label: 'Court Room' }
-  ];
 
   return (
-    <div style={styles.container}>
-      <style>{`
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
-        .dot-bounce { animation: bounce 1.4s infinite ease-in-out both; }
-        .sidebar-item:hover { background-color: #f3f4f6; }
-        .nav-hover:hover { background-color: rgba(255, 255, 255, 0.1) !important; }
-      `}</style>
-
-      {/* Unified Header with Nav */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.logoWrapper}>
-            <img 
-              src="Screenshot 2026-01-12 002133.png" 
-              alt="Logo" 
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-              onError={(e) => { e.target.src = 'https://placehold.co/100?text=B'; }} 
-            />
+    <div className="max-w-6xl mx-auto px-4 py-12">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10 border-b border-gray-100 pb-8">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-8 bg-emerald-600 rounded-full"></span>
+            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">AI Chatbot</h1>
           </div>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Brute</h1>
+          <p className="text-lg text-slate-500 max-w-lg">
+            Consult with Brute, your specialized legal AI, for instant analysis 
+            on case law, statutes, and document drafting.
+          </p>
         </div>
 
-        {/* Navigation moved to Header */}
-        <nav style={styles.navGroup}>
-          {views.map((view) => (
-            <button 
-              key={view.id}
-              className="nav-hover"
-              style={styles.navBtn(currentView === view.id)} 
-              onClick={() => setCurrentView(view.id)}
-            >
-              {view.label}
-            </button>
-          ))}
-        </nav>
+        <button 
+          onClick={handleNewChat}
+          className="flex items-center gap-2 bg-white px-5 py-3 rounded-xl shadow-sm border border-slate-200 text-emerald-700 font-bold hover:bg-emerald-50 transition-all active:scale-95"
+        >
+          <Plus size={18} />
+          <span>New Session</span>
+        </button>
+      </div>
 
-        <div style={{ fontSize: '0.75rem', opacity: 0.8, textAlign: 'right', display: 'none' }}>
-          Premium Legal AI
-        </div>
-        <div style={{ width: '100px' }}></div> {/* Spacer for balance */}
-      </header>
-
-      <div style={styles.mainWrapper}>
-        {/* Left Sidebar */}
-        <aside style={styles.sidebar}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
-            <button 
-              onClick={handleNewChat}
-              style={{ width: '100%', padding: '0.75rem', backgroundColor: '#005b41', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              + New Chat
-            </button>
+      {/* Main Chat Layout */}
+      <div className="flex h-[600px] bg-white rounded-3xl shadow-xl shadow-emerald-900/5 border border-slate-100 overflow-hidden">
+        
+        {/* Sidebar */}
+        <aside className="w-72 bg-slate-50 border-r border-slate-100 hidden lg:flex flex-col">
+          <div className="p-6 border-b border-slate-100 bg-white">
+            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <RotateCcw size={14} /> Recent Consultations
+            </h2>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <div style={{ padding: '1rem 1rem 0.5rem', fontSize: '0.75rem', fontWeight: 'bold', color: '#9ca3af', textTransform: 'uppercase' }}>
-              Chat Log
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {chatHistory.map(item => (
-              <div 
+              <button 
                 key={item.id} 
-                className="sidebar-item"
-                style={styles.sidebarItem}
-                onClick={() => {
-                  if (item.fullChat) {
-                    setMessages(item.fullChat);
-                    setCurrentView('chat');
-                  }
-                }}
+                className="w-full text-left p-4 rounded-2xl hover:bg-white hover:shadow-md transition-all group border border-transparent hover:border-emerald-100"
               >
-                <div style={{ fontWeight: '600', marginBottom: '2px' }}>{item.title}</div>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{item.date}</div>
-              </div>
+                <div className="font-bold text-slate-700 group-hover:text-emerald-700 truncate text-sm">{item.title}</div>
+                <div className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{item.date}</div>
+              </button>
             ))}
           </div>
         </aside>
 
-        {/* Content Area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {currentView === 'chat' ? (
-            <div style={styles.chatContent}>
-              <div style={styles.chatScroll}>
-                {messages.map((msg) => (
-                  <div key={msg.id} style={{ display: 'flex', gap: '0.75rem', flexDirection: msg.isUser ? 'row-reverse' : 'row' }}>
-                    <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', overflow: 'hidden', border: '1px solid #e5e7eb', backgroundColor: 'white', flexShrink: 0 }}>
-                      {!msg.isUser ? (
-                        <img src="Screenshot 2026-01-12 002133.png" alt="Bot" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', backgroundColor: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg style={{ width: '1rem', height: '1rem', color: '#6b7280' }} fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"></path></svg>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ maxWidth: '80%' }}>
-                      <div style={styles.bubble(msg.isUser)}>
-                        {msg.text.split('**').map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part)}
-                        {msg.file && (
-                          <div style={{ marginTop: '0.75rem', padding: '0.5rem', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '0.5rem' }}>
-                            {msg.file.preview ? <img src={msg.file.preview} style={{ maxWidth: '100%', borderRadius: '0.25rem' }} alt="file" /> : 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem' }}>
-                                <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"></path></svg>
-                                {msg.file.name}
-                              </div>
-                            }
-                          </div>
-                        )}
-                      </div>
-                      <span style={{ fontSize: '10px', color: '#9ca3af', marginTop: '0.25rem', display: 'block', textAlign: msg.isUser ? 'right' : 'left' }}>{msg.time}</span>
-                    </div>
-                  </div>
-                ))}
-                {isTyping && (
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', overflow: 'hidden', border: '1px solid #e5e7eb', backgroundColor: 'white' }}>
-                      <img src="Screenshot 2026-01-12 002133.png" alt="Bot" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    </div>
-                    <div style={{ padding: '0.75rem 1rem', backgroundColor: 'white', borderRadius: '1.5rem 1.5rem 1.5rem 0.2rem', border: '1px solid #e5e7eb', display: 'flex', gap: '3px' }}>
-                      <div className="dot-bounce" style={{ width: '4px', height: '4px', backgroundColor: '#9ca3af', borderRadius: '50%', animationDelay: '-0.32s' }}></div>
-                      <div className="dot-bounce" style={{ width: '4px', height: '4px', backgroundColor: '#9ca3af', borderRadius: '50%', animationDelay: '-0.16s' }}></div>
-                      <div className="dot-bounce" style={{ width: '4px', height: '4px', backgroundColor: '#9ca3af', borderRadius: '50%' }}></div>
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              <footer style={styles.footer}>
-                <div style={{ maxWidth: '56rem', margin: '0 auto', display: 'flex', gap: '0.5rem', backgroundColor: '#f9fafb', borderRadius: '9999px', border: '1px solid #d1d5db', padding: '0.5rem 1rem', alignItems: 'center' }}>
-                  <input type="file" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileUpload} />
-                  <button onClick={() => fileInputRef.current.click()} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6b7280' }}>
-                    <svg style={{ width: '1.5rem', height: '1.5rem' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                  </button>
-                  <input 
-                    type="text" 
-                    value={inputValue} 
-                    onChange={(e) => setInputValue(e.target.value)} 
-                    onKeyPress={(e) => e.key === 'Enter' && handleSend(inputValue)}
-                    placeholder="Type your message..." 
-                    style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#374151' }} 
-                  />
-                  <button onClick={() => handleSend(inputValue)} style={{ width: '2.25rem', height: '2.25rem', borderRadius: '50%', border: 'none', backgroundColor: '#005b41', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <svg style={{ width: '1.25rem', height: '1.25rem', transform: 'rotate(-45deg) translateX(2px)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                  </button>
+        {/* Chat Area */}
+        <main className="flex-1 flex flex-col bg-white">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`flex gap-4 ${msg.isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm 
+                  ${msg.isUser ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-900 text-white'}`}>
+                  {msg.isUser ? <User size={20} /> : <MessageSquare size={20} />}
                 </div>
-              </footer>
-            </div>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white' }}>
-              <div style={{ width: '80px', height: '80px', backgroundColor: '#f0fdf4', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                <svg style={{ width: '40px', height: '40px', color: '#005b41' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  {currentView === 'analyzer' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
-                  {currentView === 'learning' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
-                  {currentView === 'court' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />}
-                </svg>
+                <div className={`max-w-[80%] space-y-1 ${msg.isUser ? 'text-right' : 'text-left'}`}>
+                  <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm
+                    ${msg.isUser 
+                      ? 'bg-emerald-700 text-white rounded-tr-none' 
+                      : 'bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none'}`}>
+                    
+                    {/* Markdown-like bolding logic */}
+                    {msg.text.split('**').map((part, i) => i % 2 === 1 ? <strong key={i} className="font-black">{part}</strong> : part)}
+                    
+                    {msg.file && (
+                      <div className="mt-3 p-3 bg-black/10 rounded-xl flex items-center gap-3 border border-white/10">
+                        <Paperclip size={16} />
+                        <span className="text-xs font-bold truncate">{msg.file.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{msg.time}</span>
+                </div>
               </div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {views.find(v => v.id === currentView)?.label}
-              </h2>
-              <p style={{ color: '#6b7280', marginTop: '0.5rem' }}>Feature coming soon!</p>
+            ))}
+            
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className="flex gap-4 animate-pulse">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white italic font-serif text-xl">B</div>
+                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-none flex gap-1 items-center">
+                  <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                  <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                  <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <footer className="p-6 bg-white border-t border-slate-100">
+            <div className="max-w-4xl mx-auto relative group">
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+              >
+                <Paperclip size={20} />
+              </button>
+              <input 
+                type="text" 
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSend(inputValue)}
+                placeholder="Ask Brute about legal matters..."
+                className="w-full bg-slate-100 border-none rounded-2xl py-4 pl-14 pr-16 text-sm focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all shadow-inner"
+              />
+              <button 
+                onClick={() => handleSend(inputValue)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 bg-emerald-700 text-white p-2.5 rounded-xl hover:bg-emerald-800 shadow-md hover:shadow-emerald-900/20 transition-all active:scale-95"
+              >
+                <Send size={18} />
+              </button>
+              <input type="file" className="hidden" ref={fileInputRef} />
             </div>
-          )}
-        </div>
+            <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">
+              Brute AI may provide information that requires professional verification.
+            </p>
+          </footer>
+        </main>
       </div>
     </div>
   );

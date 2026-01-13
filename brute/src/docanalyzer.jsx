@@ -1,369 +1,226 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+// Make sure these paths match your project structure
+import { summarizeChat } from '../backend/ai.js';
+import { sendImageAsBase64 } from '../backend/ocr.js';
 import { 
   CloudUpload, 
   FileText, 
   X, 
   Brain, 
-  Lightbulb, 
-  List, 
   RotateCcw,
-  CheckCircle2
+  ChevronRight,
+  AlertCircle
 } from 'lucide-react';
 
-/**
- * Document Analysis Dashboard
- * A React-based dashboard for processing documents and extracting AI insights.
- * This version uses pure inline CSS objects for all styling.
- */
-
 const Docscan = () => {
-  // State Management
+  // --- State Management ---
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle | loading | results
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [status, setStatus] = useState('idle'); // idle | loading | results | error
+  const [loadingMessage, setLoadingMessage] = useState('Synthesizing Data...');
+  
+  // Data States (Now dynamic instead of static consts)
+  const [insights, setInsights] = useState([]);
+  const [mainPoints, setMainPoints] = useState([]);
 
-  // Handle responsiveness manually for inline styles
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // --- Logic Integration ---
+  const startAnalysis = async () => {
+    if (!file) return;
 
-  const isMobile = windowWidth < 768;
-
-  // --- Style Definitions ---
-  const colors = {
-    primary: '#064e3b',
-    primaryHover: '#065f46',
-    background: '#f0f2f0',
-    white: '#ffffff',
-    grayText: '#6b7280',
-    border: '#e5e7eb',
-    emerald: '#10b981',
-    amber: '#f59e0b',
-    blue: '#3b82f6',
-    purple: '#a855f7',
-    red: '#ef4444'
-  };
-
-  const styles = {
-    appContainer: {
-      minHeight: '100-screen',
-      backgroundColor: colors.background,
-      color: '#1a2e26',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      paddingBottom: '5rem',
-    },
-    header: {
-      backgroundColor: colors.primary,
-      color: colors.white,
-      padding: '1.5rem',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    },
-    headerContent: {
-      maxWidth: '1152px',
-      margin: '0 auto',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    main: {
-      maxWidth: '1152px',
-      margin: '2rem auto 0',
-      padding: '0 1rem',
-    },
-    card: {
-      backgroundColor: colors.white,
-      borderRadius: '0.75rem',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      border: `1px solid ${colors.border}`,
-      overflow: 'hidden',
-      marginBottom: '2rem',
-      opacity: status === 'loading' ? 0.4 : 1,
-      transition: 'opacity 0.5s ease',
-      pointerEvents: status === 'loading' ? 'none' : 'auto',
-    },
-    cardHeader: {
-      backgroundColor: colors.primary,
-      color: colors.white,
-      padding: '0.75rem 1.5rem',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-    },
-    dropZone: (active) => ({
-      margin: '1.5rem',
-      borderRadius: '0.75rem',
-      padding: '3rem 1rem',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center',
-      cursor: 'pointer',
-      border: `2px dashed ${active ? colors.emerald : '#064e3b4d'}`,
-      backgroundColor: active ? '#ecfdf5' : colors.white,
-      transition: 'all 0.3s ease',
-      transform: active ? 'scale(1.01)' : 'scale(1)',
-    }),
-    btnPrimary: {
-      backgroundColor: colors.primary,
-      color: colors.white,
-      padding: '0.75rem 2rem',
-      borderRadius: '0.5rem',
-      fontWeight: '600',
-      border: 'none',
-      cursor: 'pointer',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-      transition: 'background-color 0.2s',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-    },
-    filePreview: {
-      backgroundColor: '#fffbeb',
-      border: '1px solid #fef3c7',
-      borderRadius: '0.5rem',
-      padding: '1rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      margin: '1.5rem',
-    },
-    insightCard: (borderColor) => ({
-      borderLeft: `4px solid ${borderColor}`,
-      backgroundColor: '#f9fafb',
-      padding: '1rem',
-      borderRadius: '0 0.5rem 0.5rem 0',
-      display: 'flex',
-      flexDirection: isMobile ? 'column' : 'row',
-      justifyContent: 'space-between',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      gap: '1rem',
-      marginBottom: '1rem',
-    }),
-    tag: (bg, text) => ({
-      backgroundColor: bg,
-      color: text,
-      padding: '0.25rem 0.75rem',
-      borderRadius: '0.25rem',
-      fontSize: '0.75rem',
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: '0.05em',
-    }),
-    pointRow: {
-      padding: '1.5rem',
-      borderBottom: `1px solid ${colors.border}`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }
-  };
-
-  // Mock Data
-  const insights = [
-    {
-      id: 1,
-      title: "Accelerated Arctic Ice Melting",
-      description: "Arctic sea ice has decreased by 13% per decade since 1979, with projections indicating ice-free summers by 2030.",
-      tag: "Environmental",
-      tagColor: colors.emerald,
-      tagBg: '#d1fae5',
-      tagText: '#065f46'
-    },
-    {
-      id: 2,
-      title: "Economic Impact on Agriculture",
-      description: "Climate variability has resulted in 20% crop yield reduction in vulnerable regions, affecting global food security.",
-      tag: "Economic",
-      tagColor: colors.amber,
-      tagBg: '#fef3c7',
-      tagText: '#92400e'
-    },
-    {
-      id: 3,
-      title: "Renewable Energy Growth",
-      description: "Solar and wind energy capacity has increased by 45% globally, showing promising trends in decarbonization efforts.",
-      tag: "Technology",
-      tagColor: colors.blue,
-      tagBg: '#dbeafe',
-      tagText: '#1e40af'
-    },
-    {
-      id: 4,
-      title: "Migration Patterns",
-      description: "Climate-induced displacement has affected over 25 million people worldwide, creating humanitarian challenges.",
-      tag: "Social",
-      tagColor: colors.purple,
-      tagBg: '#f3e8ff',
-      tagText: '#6b21a8'
-    }
-  ];
-
-  const mainPoints = [
-    { id: 1, title: "Global Temperature Rise", desc: "Average global temperatures have increased by 1.2°C since pre-industrial times.", confidence: "95%" },
-    { id: 2, title: "Renewable Energy Transition", desc: "Renewable energy sources now account for 30% of global electricity generation.", confidence: "92%" },
-    { id: 3, title: "Biodiversity Loss", desc: "An estimated 1 million species are at risk of extinction due to habitat destruction.", confidence: "88%" },
-    { id: 4, title: "Carbon Emissions Trends", desc: "Global CO2 emissions reached 40 billion tons in 2023.", confidence: "94%" },
-    { id: 5, title: "International Cooperation", desc: "150+ countries have committed to net-zero emissions by 2050.", confidence: "85%" }
-  ];
-
-  // Handlers
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const startAnalysis = () => {
     setStatus('loading');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => setStatus('results'), 2000);
+    setLoadingMessage('Initializing OCR engine...');
+
+    try {
+      // 1️⃣ Run OCR
+      // Note: We await the result directly. If your sendImageAsBase64 uses a callback for progress,
+      // you can hook it into a progress bar state here.
+      const ocrText = await sendImageAsBase64(file);
+      
+      console.log("OCR Extraction Complete:", ocrText?.substring(0, 100) + "...");
+
+      // 2️⃣ Stream summary from Legal AI
+      setLoadingMessage('Analyzing legal context & generating insights...');
+      
+      // We assume summarizeChat returns a JSON object. 
+      // If it returns a string, we might need to parse it or adjust the prompt.
+      const aiResponse = await summarizeChat(ocrText);
+
+      // 3️⃣ Map AI response to UI State
+      // This defends against the AI returning different structures
+      if (aiResponse) {
+        setInsights(aiResponse.insights || []); 
+        setMainPoints(aiResponse.mainPoints || []);
+        setStatus('results');
+      } else {
+        throw new Error("Empty response from AI");
+      }
+
+    } catch (error) {
+      console.error("Analysis Failed:", error);
+      setLoadingMessage(`Error: ${error.message}`);
+      setStatus('error');
+    }
   };
 
   const reset = () => {
     setFile(null);
     setStatus('idle');
+    setInsights([]);
+    setMainPoints([]);
   };
 
+  // --- Render ---
   return (
-    <div style={styles.appContainer}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div>
-            <h1 style={{ fontSize: '1.875rem', fontWeight: '700', margin: 0 }}>Document Analysis Dashboard</h1>
-            <p style={{ color: '#dcfce7', opacity: 0.8, fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              AI-powered document insights and summary
-            </p>
+    <div className="max-w-6xl mx-auto px-4 py-12">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10 border-b border-gray-100 pb-8">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-8 bg-green-600 rounded-full"></span>
+            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
+              Doc Analyzer
+            </h1>
           </div>
-          {status === 'results' && (
+          <p className="text-lg text-slate-500 max-w-lg">
+            Upload specialized legal documents to begin extraction of mastery. 
+            Our AI models are designed for both beginners and practitioners.
+          </p>
+        </div>
+
+        {(status === 'results' || status === 'error') && (
+          <div className="hidden md:block">
             <button 
               onClick={reset}
-              style={{ ...styles.btnPrimary, backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.3)', padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+              className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100 flex items-center gap-2 hover:bg-slate-50 transition-colors"
             >
-              <RotateCcw size={16} /> Upload New
+              <RotateCcw size={16} className="text-blue-700" />
+              <span className="text-sm font-bold text-slate-600 uppercase tracking-wider">New Scan</span>
             </button>
-          )}
-        </div>
-      </header>
+          </div>
+        )}
+      </div>
 
-      <main style={styles.main}>
+      <main className="space-y-8">
         {/* Step 1: Upload Section */}
-        {status !== 'results' && (
-          <section style={styles.card}>
-            <div style={styles.cardHeader}>
-              <CloudUpload size={20} />
-              <span style={{ fontWeight: '600' }}>Upload Document</span>
-            </div>
-            
+        {status !== 'results' && status !== 'loading' && (
+          <div className="transition-all duration-500 opacity-100">
             {!file ? (
               <div 
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                style={styles.dropZone(isDragging)}
+                onDrop={(e) => { e.preventDefault(); setFile(e.dataTransfer.files[0]); setIsDragging(false); }}
+                className={`group bg-white p-16 rounded-3xl border-2 border-dashed transition-all duration-300 text-center
+                  ${isDragging ? 'border-blue-500 bg-blue-50 scale-[1.01]' : 'border-slate-200 hover:border-blue-300 hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2'}`}
               >
-                <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '50%', marginBottom: '1rem' }}>
-                  <CloudUpload size={36} color={colors.emerald} />
+                <div className="w-20 h-20 bg-slate-50 group-hover:bg-blue-50 text-slate-400 group-hover:text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 transition-all">
+                  <CloudUpload size={40} />
                 </div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>Drag and drop your document here</h3>
-                <p style={{ color: colors.grayText, marginBottom: '1.5rem' }}>or click to browse from your computer</p>
-                <label style={styles.btnPrimary}>
-                  Select File
-                  <input type="file" style={{ display: 'none' }} onChange={(e) => setFile(e.target.files[0])} />
+                <h3 className="text-2xl font-bold text-slate-800">Drop document here</h3>
+                <p className="text-slate-500 mb-8 text-lg font-medium">Support for PDF, DOCX, or legal reports</p>
+                <label className="inline-block px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-lg cursor-pointer hover:bg-blue-700 transition-all active:scale-95">
+                  Browse Files
+                  <input type="file" className="hidden" onChange={(e) => setFile(e.target.files[0])} />
                 </label>
               </div>
             ) : (
-              <div style={{ padding: '1.5rem' }}>
-                <div style={styles.filePreview}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ backgroundColor: '#fff', padding: '0.75rem', borderRadius: '0.25rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                      <FileText size={24} color={colors.primary} />
+              <div className="bg-blue-600 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white">
+                      <FileText size={32} />
                     </div>
                     <div>
-                      <p style={{ fontWeight: '700', margin: 0 }}>{file.name}</p>
-                      <p style={{ fontSize: '0.875rem', color: colors.grayText, margin: 0 }}>{(file.size / 1024).toFixed(2)} KB</p>
+                      <h3 className="text-2xl font-bold">{file.name}</h3>
+                      <p className="text-blue-100 font-medium">Ready for analysis • {(file.size / 1024).toFixed(1)} KB</p>
                     </div>
                   </div>
-                  <button onClick={() => setFile(null)} style={{ background: colors.red, color: 'white', border: 'none', padding: '0.5rem', borderRadius: '0.5rem', cursor: 'pointer' }}>
-                    <X size={20} />
-                  </button>
+                  <div className="flex gap-4 w-full md:w-auto">
+                    <button onClick={() => setFile(null)} className="p-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl transition-colors">
+                      <X size={24} />
+                    </button>
+                    <button 
+                      onClick={startAnalysis} 
+                      className="flex-grow px-10 py-4 bg-white text-blue-700 font-extrabold rounded-2xl shadow-lg hover:bg-blue-50 transition-all active:scale-95"
+                    >
+                      Start Analysis
+                    </button>
+                  </div>
                 </div>
-                <button onClick={startAnalysis} style={{ ...styles.btnPrimary, width: '100%', justifyContent: 'center', marginTop: '1rem' }}>
-                  Analyze Document
-                </button>
               </div>
             )}
-          </section>
+          </div>
         )}
 
         {/* Loading State */}
         {status === 'loading' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '5rem 0' }}>
-            <div style={{ position: 'relative', width: '4rem', height: '4rem' }}>
-              <div style={{ width: '100%', height: '100%', border: '4px solid #d1fae5', borderTopColor: colors.emerald, borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-              <Brain style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} color={colors.primary} size={24} />
+          <div className="flex flex-col items-center py-20">
+            <div className="relative h-24 w-24 mb-6">
+              <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+              <Brain className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-700" size={36} />
             </div>
-            <p style={{ marginTop: '1.5rem', fontSize: '1.125rem', fontWeight: '600', color: '#374151' }}>Working on it...</p>
-            <p style={{ color: colors.grayText, fontSize: '0.875rem' }}>Extracting key concepts and generating summary</p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <h3 className="text-2xl font-bold text-slate-800 animate-pulse">{loadingMessage}</h3>
           </div>
         )}
 
-        {/* Results Section */}
-        {status === 'results' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Key Insights */}
-            <section style={{ ...styles.card, opacity: 1, pointerEvents: 'auto' }}>
-              <div style={styles.cardHeader}>
-                <Lightbulb size={20} />
-                <span style={{ fontWeight: '600' }}>Key Insights</span>
-              </div>
-              <div style={{ padding: '1.5rem' }}>
-                {insights.map((insight) => (
-                  <div key={insight.id} style={styles.insightCard(insight.tagColor)}>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ fontWeight: '700', fontSize: '1.125rem', margin: '0 0 0.25rem 0' }}>{insight.title}</h3>
-                      <p style={{ color: colors.grayText, fontSize: '0.875rem', lineHeight: 1.5, margin: 0 }}>{insight.description}</p>
-                    </div>
-                    <span style={styles.tag(insight.tagBg, insight.tagText)}>{insight.tag}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+        {/* Error State */}
+        {status === 'error' && (
+          <div className="bg-red-50 border border-red-200 rounded-3xl p-10 text-center">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-red-800 mb-2">Analysis Failed</h3>
+            <p className="text-red-600 mb-6">{loadingMessage}</p>
+            <button onClick={reset} className="px-6 py-3 bg-red-100 text-red-700 font-bold rounded-xl hover:bg-red-200 transition-colors">
+              Try Again
+            </button>
+          </div>
+        )}
 
-            {/* Main Points */}
-            <section style={{ ...styles.card, opacity: 1, pointerEvents: 'auto' }}>
-              <div style={styles.cardHeader}>
-                <List size={20} />
-                <span style={{ fontWeight: '600' }}>Main Points</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {mainPoints.map((point) => (
-                  <div key={point.id} style={styles.pointRow}>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                      <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: '#d1fae5', color: '#064e3b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', flexShrink: 0 }}>
-                        {point.id}
-                      </div>
-                      <div>
-                        <h3 style={{ fontWeight: '700', margin: 0 }}>{point.title}</h3>
-                        <p style={{ color: colors.grayText, fontSize: '0.875rem', marginTop: '0.25rem', margin: 0 }}>{point.desc}</p>
-                      </div>
-                    </div>
-                    {!isMobile && (
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: colors.emerald, backgroundColor: '#f0fdf4', padding: '0.25rem 0.75rem', borderRadius: '1rem', border: '1px solid #d1fae5', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
-                        <CheckCircle2 size={12} /> {point.confidence} confidence
-                      </span>
+        {/* Results Grid (Dashboard Style) */}
+        {status === 'results' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-700">
+            <div className="lg:col-span-1 space-y-6">
+              <h2 className="text-xl font-bold text-slate-900 border-l-4 border-blue-600 pl-4">Key Insights</h2>
+              <div className="space-y-4">
+                {insights.length > 0 ? insights.map((insight, index) => (
+                  <div key={index} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
+                    {insight.tag && (
+                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded mb-3 inline-block">{insight.tag}</span>
                     )}
+                    <h3 className="font-bold text-slate-800 mb-2">{insight.title}</h3>
+                    <p className="text-slate-500 text-sm leading-relaxed">{insight.description}</p>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-slate-400 italic">No specific insights generated.</p>
+                )}
               </div>
-            </section>
+            </div>
+
+            <div className="lg:col-span-2 space-y-6">
+              <h2 className="text-xl font-bold text-slate-900 border-l-4 border-blue-600 pl-4">Summary Points</h2>
+              <div className="grid gap-4">
+                {mainPoints.length > 0 ? mainPoints.map((point, index) => (
+                  <div key={index} className="group flex items-center gap-6 bg-white p-6 rounded-2xl border border-slate-100 hover:border-blue-100 hover:shadow-xl transition-all">
+                    <div className="w-14 h-14 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center font-extrabold text-xl group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      {index + 1}
+                    </div>
+                    <div className="flex-grow">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="font-bold text-slate-800 text-lg">{point.title}</h3>
+                        {point.confidence && (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                {point.confidence} Match
+                            </span>
+                        )}
+                      </div>
+                      <p className="text-slate-500 text-sm">{point.desc}</p>
+                    </div>
+                    <ChevronRight className="text-slate-200 group-hover:text-blue-300 transition-all" size={24} />
+                  </div>
+                )) : (
+                   <p className="text-slate-400 italic">No summary points available.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
