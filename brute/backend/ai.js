@@ -1,46 +1,65 @@
-/**
- * Asks the Legal AI a question and streams the response to a callback.
- * @param {string} prompt - The user question.
- * @param {function} onChunk - Callback function called for every new word/token.
- */
-async function askLegalAI(prompt, onChunk) {
-    // UPDATED: Point to your local FastAPI endpoint
-    const url = "http://127.0.0.1:5000/api/ask"; 
-    
-    
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getChatHistory, newMessage } from "../firebaseSetUp"; 
+import { GEMINI_API_KEY } from "../src/secrets";
 
-    try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                // NOTE: 'Bypass-Tunnel-Reminder' is removed. 
-                // Your Python backend handles the upstream connection headers now.
-            },
-            body: JSON.stringify({ prompt: prompt }),
-        });
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-        if (!response.body) {
-            throw new Error("ReadableStream not supported in this browser.");
-        }
+export async function runChat(chatId, userInput, onStream) {
+  try {
+    const rawHistory = await getChatHistory(chatId); 
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
+    const formattedHistory = (rawHistory || []).flatMap(msg => [
+      { role: "user", parts: [{ text: msg.user }] },
+      { role: "model", parts: [{ text: msg.bot }] }
+    ]);
 
-        // Read the stream chunk by chunk
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+    // 1. ADD SYSTEM INSTRUCTION HERE
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash", // Updated to a valid model version
+      systemInstruction: "You are a specialized legal AI assistant. You must ONLY answer questions related to law, court proceedings, judiciary, and legal matters. If a user asks anything outside of these topics, politely inform them that you are restricted to providing legal-related information only."
+    });
 
-            // Decode the Uint8Array chunk to a string
-            const chunk = decoder.decode(value, { stream: true });
-            
-            // Pass the new text to your UI callback
-            onChunk(chunk);
-        }
-    } catch (error) {
-        console.error("Streaming error:", error);
+    const chat = model.startChat({
+      history: formattedHistory,
+      generationConfig: {
+        maxOutputTokens: 500,
+        temperature: 0.5, // Lower temperature for more factual legal responses
+      },
+    });
+
+    const result = await chat.sendMessageStream(userInput);
+    let fullResponse = "";
+
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullResponse += chunkText;
+      if (onStream) onStream(chunkText); 
     }
+
+    const newId = await newMessage(chatId, fullResponse, userInput);
+    
+    return { fullResponse, newId };
+
+  } catch (error) {
+    console.error("AI Error:", error);
+    throw error;
+  }
 }
 
-export default askLegalAI;
+
+
+export async function summarizeChat(text) {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+  });
+
+  const prompt = `
+Summarize the following text clearly and concisely:
+
+${text}
+`;
+
+  const result = await model.generateContent(prompt);
+  console.log("summary :",result.response.text())
+  return result.response.text();
+}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Paperclip, Plus, MessageSquare, User, RotateCcw } from 'lucide-react';
-// Import your backend function
-import  askLegalAI  from '../backend/ai.js'; 
+import { runChat } from '../backend/ai'; // Ensure this path is correct
 
 const createInitialBotMessage = () => ({
   id: 'initial',
@@ -11,9 +10,11 @@ const createInitialBotMessage = () => ({
 });
 
 const Chat = () => {
+  // --- States ---
   const [messages, setMessages] = useState([createInitialBotMessage()]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState(null); // Track the active Firestore Doc
   const [chatHistory, setChatHistory] = useState([
     { id: 101, title: 'Legal Research - Case A', date: 'Today' },
     { id: 102, title: 'Contract Review - Corp X', date: 'Yesterday' },
@@ -22,6 +23,7 @@ const Chat = () => {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // --- Helpers ---
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -30,6 +32,7 @@ const Chat = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // --- Handlers ---
   const handleNewChat = () => {
     if (messages.length > 1) {
       const firstUserMsg = messages.find(m => m.isUser)?.text || "New Conversation";
@@ -38,11 +41,13 @@ const Chat = () => {
     }
     setMessages([createInitialBotMessage()]);
     setInputValue('');
+    setCurrentChatId(null); // Reset ID so ai.js knows to create a new document
   };
 
   const handleSend = async (text) => {
     if (!text.trim()) return;
 
+    // 1. Add User Message to UI
     const userMessage = {
       id: Date.now(),
       text: text,
@@ -58,9 +63,10 @@ const Chat = () => {
     let accumulatedResponse = "";
 
     try {
-      await askLegalAI(text, (chunk) => {
-        // Stop the typing pulse once the first chunk arrives
-        setIsTyping(false);
+      // 2. Call the AI Backend with Streaming
+      // We pass a callback function to handle chunks as they arrive
+      const result = await runChat(currentChatId, text, (chunk) => {
+        setIsTyping(false); // Stop pulse as soon as first word arrives
         accumulatedResponse += chunk;
 
         setMessages(prev => {
@@ -82,9 +88,16 @@ const Chat = () => {
           }
         });
       });
+
+      // 3. Update the Current Chat ID if it was a new session
+      if (!currentChatId && result?.newId) {
+        setCurrentChatId(result.newId);
+      }
+
     } catch (error) {
       setIsTyping(false);
-      console.error("Streaming error:", error);
+      console.error("AI Communication Error:", error);
+      // Optional: Add an error message to the chat UI here
     }
   };
 
@@ -150,7 +163,7 @@ const Chat = () => {
                       ? 'bg-emerald-700 text-white rounded-tr-none' 
                       : 'bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none'}`}>
                     
-                    {/* Simplified formatting logic for text chunks */}
+                    {/* Markdown-like bolding logic */}
                     {msg.text.split('**').map((part, i) => i % 2 === 1 ? <strong key={i} className="font-black">{part}</strong> : part)}
                     
                     {msg.file && (
@@ -164,6 +177,8 @@ const Chat = () => {
                 </div>
               </div>
             ))}
+            
+            {/* Typing Indicator */}
             {isTyping && (
               <div className="flex gap-4 animate-pulse">
                 <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white italic font-serif text-xl">B</div>

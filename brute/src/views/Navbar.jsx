@@ -18,6 +18,7 @@ const Navbar = ({ onLogout, userEmail }) => {
     { name: 'Law Tutor', path: '/lawtutor', icon: <BookOpen size={18} />, activeColor: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
     { name: 'AI Chatbot', path: '/chatbot', icon: <MessageSquare size={18} />, activeColor: 'bg-blue-50 text-blue-700 border-blue-100' },
     { name: 'Doc Analyzer', path: '/docscan', icon: <FileSearch size={18} />, activeColor: 'bg-sky-50 text-sky-700 border-sky-100' },
+    { name: 'Virtual Courtroom', path: '/courtroom', icon: <FileSearch size={18} />, activeColor: 'bg-sky-50 text-sky-700 border-sky-100' },
   ];
 
   return (

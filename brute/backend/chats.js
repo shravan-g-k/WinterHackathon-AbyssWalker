@@ -6,7 +6,7 @@ import {
   getDocs, 
   arrayUnion 
 } from "firebase/firestore"; 
-import { db, auth } from "./firebaseSetUp"; // Corrected file reference
+import { db, auth } from "../firebaseSetUp"; // Corrected file reference
 
 // Define these or pass them as arguments
 const appId = "my_app_id"; 

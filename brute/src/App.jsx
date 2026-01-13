@@ -17,6 +17,7 @@ import Docscan from './docanalyzer.jsx';
 import Chat from './chat.jsx';
 
 import './tailwind.css';
+import VirtualCourtroom from './views/courtroom.jsx';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -88,6 +89,8 @@ function App() {
                 
                 {/* AI Chatbot Placeholder */}
                 <Route path="/chatbot" element={<Chat/>} />
+                <Route path="/courtroom" element={<VirtualCourtroom/>} />
+                
                 
                 <Route path="/auth" element={<Navigate to="/" />} />
               </>
